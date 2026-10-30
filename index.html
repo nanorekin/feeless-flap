@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Feeless Flap</title>
+<meta name="description" content="A free one-tap flyer. Guide an XNO coin through the fee gates, earn medals and take on a new daily course. No fees.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg:#0b1220; --card:#121c30; --ink:#e7eefc; --muted:#93a3c0; --line:#24334f;
+  --accent:#4ea1ff; --accent-ink:#04101f; --field:#0e1729;
+  --good:#4ade80; --bad:#ff6b6b; --gold:#fbbf24; --scrim:rgba(4,9,20,0.82); color-scheme:dark;
+}
+* { box-sizing:border-box; }
+html { background:var(--bg); }
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.5 "Sora","Helvetica Neue",Arial,sans-serif; -webkit-text-size-adjust:100%;
+  padding-inline:max(16px, env(safe-area-inset-left, 0px)); padding-block:12px 40px;
+}
+[hidden] { display:none !important; }
+.layout { max-width:980px; margin-inline:auto; display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start; }
+@media (min-width:900px) { .layout { grid-template-columns:minmax(0,420px) minmax(0,1fr); } .stage { position:sticky; top:12px; } }
+.layout > * { min-width:0; }
+.mono { font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace; font-variant-numeric:tabular-nums; }
+button, .btn {
+  font:600 0.9rem "Sora","Helvetica Neue",Arial,sans-serif; cursor:pointer; text-decoration:none;
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  padding:8px 14px; min-height:44px; border-radius:8px; border:1px solid var(--line);
+  background:var(--card); color:var(--ink); touch-action:manipulation; line-height:1.2;
+}
+button:disabled { opacity:0.5; cursor:not-allowed; }
+button.primary, .btn.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:800; }
+button[aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); }
+button.primary[aria-pressed="true"] { box-shadow:none; }
+button:focus-visible, .btn:focus-visible, summary:focus-visible, canvas:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+
+.stage { display:flex; flex-direction:column; gap:10px; width:100%; max-width:420px; margin-inline:auto; }
+@media (min-width:900px) { .stage { margin-inline:0; } }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.topbar h1 { margin:0; font-weight:800; font-size:1.25rem; line-height:1.1; letter-spacing:-0.01em; white-space:nowrap; }
+.topbar .sup { color:var(--gold); font-size:0.9em; }
+.modes { display:flex; gap:6px; }
+.modes button { min-height:36px; padding:4px 12px; font-size:0.82rem; }
+.hud { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.hud div { display:flex; flex-direction:column; background:var(--card); border:1px solid var(--line); border-radius:8px; padding:4px 10px; min-width:0; }
+.hud small { color:var(--muted); font-size:0.62rem; text-transform:uppercase; letter-spacing:0.08em; }
+.hud b { font-family:"JetBrains Mono",monospace; font-size:1.05rem; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mod { font-size:0.78rem; line-height:1.3; color:var(--muted); min-height:1.3em; }
+.mod b { color:var(--gold); font-weight:600; }
+.board { position:relative; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--field); line-height:0; }
+canvas { display:block; width:100%; height:auto; aspect-ratio:360/560; touch-action:manipulation; user-select:none; -webkit-user-select:none; cursor:pointer; }
+.overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:12px; background:var(--scrim); z-index:2; line-height:1.5; }
+.sheet { width:100%; max-width:300px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:10px; }
+.sheet h2 { margin:0; font-weight:800; font-size:1.2rem; line-height:1.2; }
+.sheet p { margin:0; color:var(--muted); font-size:0.84rem; }
+.sheet .big { font-family:"JetBrains Mono",monospace; font-weight:600; font-size:2.4rem; line-height:1; }
+.sheet .newbest { color:var(--gold); font-weight:800; font-size:0.8rem; }
+.sheet .stack { display:flex; flex-direction:column; gap:8px; }
+.sheet .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sheet .status { min-height:1.2em; font-size:0.78rem; color:var(--accent); }
+.ctl { display:grid; grid-template-columns:repeat(2,1fr); gap:6px; }
+.ctl button { min-height:40px; padding:4px 8px; font-size:0.82rem; }
+
+.rest { display:flex; flex-direction:column; gap:20px; }
+.card2 { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:18px; display:flex; flex-direction:column; gap:12px; }
+.card2 h2 { font-weight:800; font-size:1.2rem; margin:0; line-height:1.15; }
+.card2 p { margin:0; color:var(--muted); font-size:0.9rem; }
+.stats { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+.stat { background:var(--field); border:1px solid var(--line); border-radius:6px; padding:8px 10px; display:flex; flex-direction:column; min-width:0; }
+.stat small { color:var(--muted); font-size:0.72rem; }
+.stat b { font:600 1.25rem "JetBrains Mono",monospace; overflow-wrap:anywhere; }
+.row { display:flex; flex-wrap:wrap; gap:8px; }
+.hint { font-size:0.82rem; color:var(--muted); margin:0; }
+.status { font-size:0.85rem; min-height:1.3em; color:var(--accent); }
+.skins { display:flex; flex-wrap:wrap; gap:8px; }
+.skins button { flex-direction:column; align-items:flex-start; gap:0; padding:8px 12px; }
+.skins small { color:var(--muted); font-weight:500; font-size:0.7rem; }
+.amounts { display:flex; flex-wrap:wrap; gap:8px; }
+.amounts button { font-family:"JetBrains Mono",monospace; font-size:0.85rem; }
+.pay { display:flex; flex-wrap:wrap; gap:16px; align-items:flex-start; }
+.qr { background:#fff; padding:10px; border-radius:6px; line-height:0; flex:none; }
+.qr img, .qr canvas { max-width:100%; height:auto; aspect-ratio:auto; cursor:default; }
+.addr-box { flex:1 1 200px; min-width:0; display:flex; flex-direction:column; gap:10px; }
+.addr { font-family:"JetBrains Mono",monospace; font-size:0.78rem; word-break:break-all; user-select:all; background:var(--field); border:1px solid var(--line); border-radius:6px; padding:10px; }
+.rules { border:1px solid var(--line); border-radius:8px; background:var(--card); }
+.rules summary { cursor:pointer; padding:12px 14px; font-weight:800; }
+.rules-body { padding:0 14px 14px; display:flex; flex-direction:column; gap:10px; font-size:0.86rem; color:var(--muted); }
+.rules-body h3 { margin:6px 0 0; font:600 0.74rem "JetBrains Mono",monospace; text-transform:uppercase; letter-spacing:0.08em; color:var(--ink); }
+.rules-body p { margin:0; }
+.toast { position:fixed; left:50%; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%); max-width:min(92vw,420px); background:var(--card); border:1px solid var(--accent); border-radius:10px; padding:10px 14px; font-size:0.85rem; z-index:20; box-shadow:0 8px 30px rgba(0,0,0,0.5); text-align:center; }
+footer { color:var(--muted); font-size:0.8rem; }
+@media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
+</style></head>
+<body>
+<noscript><p style="padding:16px">Feeless Flap needs JavaScript to run.</p></noscript>
+<div class="layout">
+  <main class="stage" id="stage">
+    <div class="topbar">
+      <h1>Feeless Flap <span class="sup" id="supmark" hidden title="Supporter">&#10022;</span></h1>
+      <div class="modes" role="group" aria-label="Mode">
+        <button type="button" id="m-daily" aria-pressed="false"><span id="dayno">Daily #1</span></button>
+        <button type="button" id="m-free" aria-pressed="true">Free play</button>
+      </div>
+    </div>
+    <div class="mod" id="modbox"></div>
+    <div class="hud">
+      <div><small>Gates</small><b id="h-score">0</b></div>
+      <div><small>Best</small><b id="h-best">0</b></div>
+      <div><small>Medal</small><b id="h-medal">None</b></div>
+      <div><small>Speed</small><b id="h-speed">1.0x</b></div>
+    </div>
+    <div class="board" id="board">
+      <canvas id="cv" width="360" height="560" tabindex="0" role="img" aria-label="Flying game. Tap, click, or press Space to flap the coin up through the gaps."></canvas>
+      <div class="overlay" id="ov" role="dialog" aria-modal="true" aria-labelledby="o-title" hidden>
+        <div class="sheet">
+          <h2 id="o-title">Fee gate hit</h2>
+          <div class="big mono" id="o-score">0</div>
+          <div class="newbest" id="o-new" hidden>New best</div>
+          <p id="o-text"></p>
+          <div class="stack">
+            <button type="button" class="primary" id="o-again">Fly again</button>
+            <div class="row2">
+              <button type="button" id="o-share">Share</button>
+              <button type="button" id="o-tip">Tip 0.01 XNO</button>
+            </div>
+          </div>
+          <div class="status" id="o-status" role="status"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ctl">
+      <button type="button" id="snd" aria-pressed="true">Sound on</button>
+      <button type="button" id="restart">Restart</button>
+    </div>
+  </main>
+
+  <div class="rest">
+    <details class="rules">
+      <summary>How to play</summary>
+      <div class="rules-body">
+        <h3>Goal</h3>
+        <p>You are an XNO coin on a mission to avoid fees. Tap, click or press Space to flap upwards. Gravity pulls you back down. Fly through the gaps in the red fee gates without touching a gate, the ground or the very top of the screen's flight limit.</p>
+        <h3>Scoring</h3>
+        <p>Every gate you pass scores one point. The course speeds up and the gaps shrink a little as you go, up to a limit.</p>
+        <h3>Medals</h3>
+        <p>Bronze at 10 gates, Silver at 25, Gold at 50 and Diamond at 100.</p>
+        <h3>Daily course</h3>
+        <p>The daily course has the same gate layout for everyone and changes at 00:00 UTC. Pass 15 gates to clear it and keep your daily streak. You can retry as often as you like.</p>
+        <h3>Supporters</h3>
+        <p>A tip of 0.01 XNO or more unlocks extra coin skins. Tips are optional and the whole game is free.</p>
+      </div>
+    </details>
+
+    <section class="card2" aria-label="Daily course">
+      <h2>Daily course <span class="mono" id="d-no"></span></h2>
+      <p id="d-desc"></p>
+      <div class="stats">
+        <div class="stat"><small>Daily streak</small><b id="s-streak">0</b></div>
+        <div class="stat"><small>Best streak</small><b id="s-bstreak">0</b></div>
+        <div class="stat"><small>Days cleared</small><b id="s-days">0</b></div>
+        <div class="stat"><small>Today</small><b id="s-today">Open</b></div>
+      </div>
+      <div class="row"><button type="button" class="primary" id="d-play">Fly today's course</button></div>
+      <p class="hint" id="d-reset"></p>
+    </section>
+
+    <section class="card2" aria-label="Your record">
+      <h2>Your record</h2>
+      <div class="stats">
+        <div class="stat"><small>Best run</small><b id="r-best">0</b></div>
+        <div class="stat"><small>Flights</small><b id="r-games">0</b></div>
+        <div class="stat"><small>Gates passed</small><b id="r-gates">0</b></div>
+        <div class="stat"><small>Best medal</small><b id="r-medal">None</b></div>
+      </div>
+    </section>
+
+    <section class="card2" aria-label="Coin skins">
+      <h2>Coin skins</h2>
+      <div class="skins" id="skins" role="group" aria-label="Coin skins"></div>
+      <p id="skin-note"></p>
+    </section>
+
+    <aside class="card2" id="tip" aria-label="Tip the author">
+      <h2>Enjoying it? Send some XNO.</h2>
+      <p>Tips are optional and go straight to the creator's Nano wallet. Transfers settle in seconds with no fee. A tip of 0.01 XNO or more unlocks the supporter coin skins.</p>
+      <div class="amounts" role="group" aria-label="Amount">
+        <button type="button" data-amt="0.01" aria-pressed="true">0.01 XNO</button>
+        <button type="button" data-amt="0.05" aria-pressed="false">0.05 XNO</button>
+        <button type="button" data-amt="0.1" aria-pressed="false">0.1 XNO</button>
+        <button type="button" data-amt="" aria-pressed="false">Any amount</button>
+      </div>
+      <div class="pay">
+        <div class="qr" id="qr"></div>
+        <div class="addr-box">
+          <a class="btn primary" id="openw" href="#">Open in wallet</a>
+          <div class="addr" id="addr"></div>
+          <div class="row">
+            <button type="button" id="copy">Copy address</button>
+            <button type="button" id="check">I've sent it, check</button>
+          </div>
+          <div class="status" id="tstatus" role="status"></div>
+          <p class="hint" id="thint"></p>
+        </div>
+      </div>
+    </aside>
+
+    <footer>Only send XNO to the address shown above. Transfers on the Nano network cannot be reversed. Coin names and tickers are used for fun and are not endorsements.</footer>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = function (id) { return document.getElementById(id); };
+  const NANO_ADDRESS = "nano_3a7e3irpbpxbh1n7dk9u3cm9tnd97q1unjxn67ni9gijoxfmzguitx1xgc9u";
+  // Public Nano node RPC endpoints used only to check for a tip. Swap in your own proxy if these block browsers.
+  const RPCS = ["https://rpc.nano.to", "https://node.somenano.com/proxy"];
+  function lsGet(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
+  function jget(k, d) { try { const v = JSON.parse(lsGet(k, "")); return v === null || v === undefined ? d : v; } catch (e) { return d; } }
+
+  // ---------- constants ----------
+  const W = 360, H = 560, GROUND = 56, GY = H - GROUND, BX = 96, R = 16, HITR = 13;
+  const PW = 56, SPACING = 205, GRAV = 1500, FLAP = -440, MAXFALL = 720;
+  const SPEED0 = 135, SPEED_MAX = 215, GAP0 = 164, GAP_MIN = 130, DAILY_TARGET = 15;
+  const EPOCH = Date.UTC(2026, 9, 30);
+  const SKINS = [
+    { id: "xno", name: "Nano", t: "XNO", c: "#4a90ff", free: true }, { id: "btc", name: "Orange", t: "BTC", c: "#f7931a", free: true },
+    { id: "eth", name: "Violet", t: "ETH", c: "#627eea" }, { id: "sol", name: "Purple", t: "SOL", c: "#9945ff" },
+    { id: "xmr", name: "Ember", t: "XMR", c: "#ff6600" }, { id: "doge", name: "Gold", t: "DOGE", c: "#c2a633" }
+  ];
+  const MEDALS = [{ at: 0, n: "None" }, { at: 10, n: "Bronze" }, { at: 25, n: "Silver" }, { at: 50, n: "Gold" }, { at: 100, n: "Diamond" }];
+  function medalFor(n) { let m = MEDALS[0]; MEDALS.forEach(function (x) { if (n >= x.at) m = x; }); return m; }
+  function inkFor(hex) {
+    const v = parseInt(hex.slice(1), 16), r = v >> 16 & 255, g = v >> 8 & 255, b = v & 255;
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#101827" : "#ffffff";
+  }
+  function vib(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+  function dateKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
+  function prevKey(k) { return dateKey(new Date(Date.parse(k + "T00:00:00Z") - 864e5)); }
+  function dayNumber(k) { return Math.max(1, Math.round((Date.parse(k + "T00:00:00Z") - EPOCH) / 864e5) + 1); }
+  function xmur3(str) {
+    let h = 1779033703 ^ str.length;
+    for (let i = 0; i < str.length; i++) { h = Math.imul(h ^ str.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+    return function () { h = Math.imul(h ^ (h >>> 16), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); h ^= h >>> 16; return h >>> 0; };
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---------- storage ----------
+  let supporter = lsGet("ff-sup", "0") === "1";
+  let skin = lsGet("ff-skin", "xno");
+  let muted = lsGet("ff-mute", "0") === "1";
+  let best = parseInt(lsGet("ff-best", "0"), 10) || 0;
+  const stats = Object.assign({ games: 0, gates: 0 }, jget("ff-stats", {}));
+  const daily = Object.assign({ last: "", streak: 0, best: 0, cleared: 0 }, jget("ff-daily", {}));
+  function skinOk(id) { const s = SKINS.filter(function (x) { return x.id === id; })[0]; return !!s && (s.free || supporter); }
+  if (!skinOk(skin)) skin = "xno";
+  function skinObj() { return SKINS.filter(function (x) { return x.id === skin; })[0] || SKINS[0]; }
+  function saveStats() { lsSet("ff-stats", JSON.stringify(stats)); }
+  function liveStreak() { const k = dateKey(); return (daily.last === k || daily.last === prevKey(k)) ? daily.streak : 0; }
+  function recordDaily(key) {
+    if (daily.last === key) return;
+    daily.streak = daily.last === prevKey(key) ? daily.streak + 1 : 1;
+    daily.last = key; daily.best = Math.max(daily.best, daily.streak); daily.cleared++;
+    lsSet("ff-daily", JSON.stringify(daily));
+  }
+
+  // ---------- audio ----------
+  let ac = null;
+  function beep(freq, dur, type, vol, delay, slide) {
+    if (muted) return;
+    try {
+      if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") ac.resume();
+      const t = ac.currentTime + (delay || 0), o = ac.createOscillator(), g = ac.createGain();
+      o.type = type || "triangle"; o.frequency.setValueAtTime(freq, t);
+      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), t + dur);
+      g.gain.setValueAtTime(vol || 0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+  let lastFlapSnd = 0;
+  function flapSound() { const n = performance.now(); if (n - lastFlapSnd < 60) return; lastFlapSnd = n; beep(420, 0.1, "triangle", 0.05, 0, 760); }
+  function renderSound() { $("snd").textContent = muted ? "Sound off" : "Sound on"; $("snd").setAttribute("aria-pressed", muted ? "false" : "true"); }
+  $("snd").addEventListener("click", function () { muted = !muted; lsSet("ff-mute", muted ? "1" : "0"); renderSound(); if (!muted) beep(660, 0.08); });
+  let toastT = 0;
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { t.hidden = true; }, 3500); }
+
+  // ---------- game ----------
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  let mode = "free", dailyCfg = null;
+  let state = "ready", bird = { y: H * 0.42, vy: 0 }, pipes = [], nextWX = 0, nextIdx = 0, dist = 0, score = 0, speed = SPEED0;
+  let gapsT = [], fees = [], pops = [], clearedThisRun = false, overAt = 0, tAnim = 0, hitSide = "";
+  function gapFor(i) { return Math.max(GAP_MIN, GAP0 - i * 1.0); }
+  function buildCourse() {
+    let rng = Math.random;
+    if (mode === "daily") rng = mulberry32(xmur3("feeless-flap-" + dailyCfg.key)());
+    gapsT = []; fees = []; let t = 0.5;
+    for (let i = 0; i < 400; i++) {
+      t = Math.min(1, Math.max(0, t + (rng() * 2 - 1) * 0.5)); gapsT.push(t);
+      fees.push(5 + Math.floor(rng() * 95));
+    }
+  }
+  function spawnPipe() {
+    const i = nextIdx++, gap = gapFor(i), lo = 70 + gap / 2, hi = GY - 70 - gap / 2;
+    pipes.push({ wx: nextWX, cy: lo + (hi - lo) * (gapsT[i] === undefined ? 0.5 : gapsT[i]), gap: gap, fee: fees[i] || 20, passed: false });
+    nextWX += SPACING;
+  }
+  function newGame() {
+    $("ov").hidden = true;
+    try { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); } catch (e) {}
+    if (mode === "daily") dailyCfg = { key: dateKey(), no: dayNumber(dateKey()) }; else dailyCfg = null;
+    buildCourse();
+    bird = { y: H * 0.42, vy: 0 }; pipes = []; nextIdx = 0; nextWX = W + 40; dist = 0; score = 0; speed = SPEED0;
+    pops = []; clearedThisRun = false; state = "ready"; hitSide = "";
+    while (nextWX - dist < W + 120) spawnPipe();
+    renderHud(); renderMode();
+  }
+  function popText(txt, color) { pops.push({ t: txt, life: 1, age: 0, c: color || "#fff" }); if (pops.length > 3) pops = pops.slice(-3); }
+  function flap() {
+    if (state === "over") return;
+    if (state === "ready") state = "playing";
+    bird.vy = FLAP; flapSound();
+  }
+  function die(why) {
+    if (state === "over") return;
+    state = "over"; overAt = performance.now(); hitSide = why; vib(40);
+    beep(220, 0.3, "sawtooth", 0.06, 0, 80);
+    stats.games++; stats.gates += 0;
+    const isBest = mode === "free" && score > best;
+    if (isBest) { best = score; lsSet("ff-best", best); }
+    saveStats(); renderStats(); renderHud();
+    $("o-title").textContent = mode === "daily" && clearedThisRun ? "Daily cleared" : "Fee gate hit";
+    $("o-score").textContent = score;
+    $("o-new").hidden = !isBest || score === 0;
+    $("o-text").textContent = score + " gate" + (score === 1 ? "" : "s") + " passed. Medal: " + medalFor(score).n + "." +
+      (mode === "daily" ? (clearedThisRun ? " Streak: " + liveStreak() + "." : " Pass " + DAILY_TARGET + " gates to clear today's course.") : "");
+    $("o-status").textContent = "";
+    setTimeout(function () { $("ov").hidden = false; try { $("o-again").focus({ preventScroll: true }); } catch (e) {} }, 650);
+  }
+  function hitsRect(cx, cy, rx, ry, rw, rh) {
+    const nx = Math.max(rx, Math.min(cx, rx + rw)), ny = Math.max(ry, Math.min(cy, ry + rh));
+    return (cx - nx) * (cx - nx) + (cy - ny) * (cy - ny) < HITR * HITR;
+  }
+  function update(dt) {
+    tAnim += dt;
+    if (state === "ready") { bird.y = H * 0.42 + Math.sin(tAnim * 4.5) * 7; dist += 60 * dt; return; }
+    if (state === "over") {
+      bird.vy = Math.min(MAXFALL, bird.vy + GRAV * dt); bird.y = Math.min(GY - R, bird.y + bird.vy * dt); return;
+    }
+    bird.vy = Math.min(MAXFALL, bird.vy + GRAV * dt); bird.y += bird.vy * dt;
+    if (bird.y < R) { bird.y = R; if (bird.vy < 0) bird.vy = 0; }
+    dist += speed * dt;
+    while (nextWX - dist < W + 120) spawnPipe();
+    pipes = pipes.filter(function (p) { return p.wx - dist > -PW - 40; });
+    for (let i = 0; i < pipes.length; i++) {
+      const p = pipes[i], sx = p.wx - dist - PW / 2;
+      if (!p.passed && sx + PW < BX - HITR) {
+        p.passed = true; score++; stats.gates++;
+        speed = Math.min(SPEED_MAX, SPEED0 + score * 2.2);
+        beep(880, 0.08, "triangle", 0.05); beep(1175, 0.1, "triangle", 0.045, 0.06);
+        const m = MEDALS.filter(function (x) { return x.at === score; })[0];
+        if (m && score > 0) popText(m.n + " medal!", "#fde68a");
+        if (mode === "daily" && !clearedThisRun && score >= DAILY_TARGET) {
+          clearedThisRun = true; const was = daily.last === dateKey(); recordDaily(dailyCfg.key);
+          toast(was ? "Daily target reached again!" : "Daily course cleared! Streak: " + liveStreak()); renderDaily();
+        }
+        renderHud();
+      }
+      if (hitsRect(BX, bird.y, sx, -10, PW, p.cy - p.gap / 2 + 10) || hitsRect(BX, bird.y, sx, p.cy + p.gap / 2, PW, H)) { die("gate"); return; }
+    }
+    if (bird.y + HITR >= GY) { bird.y = GY - HITR; die("ground"); }
+  }
+  cv.addEventListener("pointerdown", function (e) { if (e.pointerType === "mouse" && e.button !== 0) return; e.preventDefault(); flap(); });
+  document.addEventListener("keydown", function (e) {
+    const k = e.key;
+    if (k === " " || e.code === "Space" || k === "ArrowUp" || k === "w" || k === "W") {
+      const tag = (document.activeElement && document.activeElement.tagName) || "";
+      if (tag === "BUTTON" || tag === "A" || tag === "SUMMARY" || tag === "INPUT") return;
+      e.preventDefault();
+      if (state === "over") { if (performance.now() - overAt > 700) newGame(); } else flap();
+    }
+  });
+  $("o-again").addEventListener("click", newGame);
+  $("restart").addEventListener("click", newGame);
+
+  // ---------- render ----------
+  let pxScale = 1;
+  function fit() {
+    const cssW = cv.clientWidth || 360, dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const pw = Math.round(cssW * dpr), ph = Math.round(pw * H / W);
+    if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+    pxScale = pw / W;
+  }
+  window.addEventListener("resize", fit);
+  function drawPipe(sx, p) {
+    const top = p.cy - p.gap / 2, bot = p.cy + p.gap / 2, capH = 18, capW = PW + 10;
+    const g = ctx.createLinearGradient(sx, 0, sx + PW, 0);
+    g.addColorStop(0, "#9f1d36"); g.addColorStop(0.5, "#e0405d"); g.addColorStop(1, "#8e1a31");
+    ctx.fillStyle = g; ctx.fillRect(sx, -4, PW, top + 4); ctx.fillRect(sx, bot, PW, GY - bot);
+    ctx.fillStyle = "#f25a76"; ctx.fillRect(sx - 5, top - capH, capW, capH); ctx.fillRect(sx - 5, bot, capW, capH);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.fillRect(sx - 5, top - 4, capW, 4); ctx.fillRect(sx - 5, bot + capH - 4, capW, 4);
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.font = "800 11px 'JetBrains Mono', monospace";
+    ctx.fillText("FEE $" + p.fee, sx + PW / 2, top - 6); ctx.fillText("FEE $" + p.fee, sx + PW / 2, bot + 13);
+  }
+  function render() {
+    ctx.setTransform(pxScale, 0, 0, pxScale, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, GY);
+    g.addColorStop(0, "#0b1a3a"); g.addColorStop(1, "#1d4a6b");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // faint scrolling candlestick chart
+    const off = dist * 0.25;
+    for (let i = Math.floor(off / 18) - 1; i < Math.floor(off / 18) + 22; i++) {
+      const x = i * 18 - off, cyc = 330 + Math.sin(i * 0.31) * 50 + Math.sin(i * 0.113) * 70, bh = 14 + Math.abs(Math.sin(i * 12.9898)) * 36;
+      ctx.fillStyle = Math.sin(i * 7.3) > 0 ? "rgba(74,222,128,0.10)" : "rgba(255,107,107,0.10)";
+      ctx.fillRect(x + 6, cyc - bh / 2 - 22, 2, bh + 44); ctx.fillRect(x + 2, cyc - bh / 2, 10, bh);
+    }
+    pipes.forEach(function (p) { const sx = p.wx - dist - PW / 2; if (sx > -PW - 12 && sx < W + 12) drawPipe(sx, p); });
+    // ground
+    ctx.fillStyle = "#0a1020"; ctx.fillRect(0, GY, W, GROUND);
+    ctx.fillStyle = "#2dd4bf"; ctx.fillRect(0, GY, W, 5);
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    for (let x = -((dist) % 28); x < W; x += 28) ctx.fillRect(x, GY + 14, 14, 4);
+    // coin
+    const s = skinObj(), tilt = Math.max(-0.45, Math.min(0.9, bird.vy / 800));
+    ctx.save(); ctx.translate(BX, bird.y); ctx.rotate(state === "over" ? 0.9 : tilt);
+    const cg = ctx.createRadialGradient(-5, -6, 2, 0, 0, R + 2); cg.addColorStop(0, "#fff"); cg.addColorStop(0.25, s.c); cg.addColorStop(1, s.c);
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = s.c; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.stroke();
+    ctx.fillStyle = inkFor(s.c); ctx.textAlign = "center"; ctx.font = "800 " + (s.t.length > 3 ? 8 : 9) + "px 'JetBrains Mono', monospace"; ctx.fillText(s.t, 0, 3.5);
+    ctx.restore();
+    ctx.textAlign = "center"; ctx.font = "800 64px Sora, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fillText(String(score), W / 2, 92);
+    if (mode === "daily") { ctx.font = "600 13px 'JetBrains Mono', monospace"; ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillText("target " + DAILY_TARGET + (score >= DAILY_TARGET ? "  done" : ""), W / 2, 116); }
+    pops.forEach(function (p, i) {
+      ctx.globalAlpha = Math.max(0, 1 - p.age / p.life); ctx.font = "800 20px Sora, sans-serif"; ctx.fillStyle = p.c;
+      ctx.fillText(p.t, W / 2, 165 + i * 24 - p.age * 25); ctx.globalAlpha = 1;
+    });
+    if (state === "ready") { ctx.font = "600 15px Sora, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.9)"; ctx.fillText("Tap or press Space to flap", W / 2, GY - 24); }
+  }
+  let lastT = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - lastT) / 1000); lastT = now;
+    update(dt);
+    pops.forEach(function (p) { p.age += dt; }); pops = pops.filter(function (p) { return p.age < p.life; });
+    render(); requestAnimationFrame(frame);
+  }
+
+  // ---------- ui ----------
+  function renderHud() {
+    $("h-score").textContent = score; $("h-best").textContent = best; $("h-medal").textContent = medalFor(score).n;
+    $("h-speed").textContent = (speed / SPEED0).toFixed(1) + "x";
+  }
+  function renderMode() {
+    $("m-daily").setAttribute("aria-pressed", mode === "daily" ? "true" : "false");
+    $("m-free").setAttribute("aria-pressed", mode === "free" ? "true" : "false");
+    $("modbox").textContent = "";
+    if (mode === "daily") {
+      const b = document.createElement("b"); b.textContent = "Daily #" + dailyCfg.no + ": ";
+      $("modbox").appendChild(b); $("modbox").appendChild(document.createTextNode("pass " + DAILY_TARGET + " gates. Same course for everyone today."));
+    }
+  }
+  function renderStats() {
+    $("r-best").textContent = best; $("r-games").textContent = stats.games; $("r-gates").textContent = stats.gates; $("r-medal").textContent = medalFor(best).n;
+  }
+  function renderDaily() {
+    const k = dateKey(), done2 = daily.last === k, s = liveStreak();
+    $("dayno").textContent = "Daily #" + dayNumber(k); $("d-no").textContent = "#" + dayNumber(k);
+    $("d-desc").textContent = "Pass " + DAILY_TARGET + " gates on today's course to " + (s ? "extend your streak." : "start a streak.");
+    $("s-streak").textContent = s; $("s-bstreak").textContent = daily.best; $("s-days").textContent = daily.cleared;
+    $("s-today").textContent = done2 ? "Cleared" : "Open";
+    $("d-play").textContent = done2 ? "Fly today's course again" : "Fly today's course";
+    const left = Math.max(0, Date.parse(k + "T00:00:00Z") + 864e5 - Date.now());
+    $("d-reset").textContent = "New course in " + Math.floor(left / 36e5) + "h " + Math.floor(left % 36e5 / 6e4) + "m (00:00 UTC).";
+  }
+  $("m-daily").addEventListener("click", function () { mode = "daily"; newGame(); });
+  $("m-free").addEventListener("click", function () { mode = "free"; newGame(); });
+  $("d-play").addEventListener("click", function () { mode = "daily"; newGame(); try { $("stage").scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {} });
+  function renderSkins() {
+    const box = $("skins"); box.textContent = "";
+    SKINS.forEach(function (s) {
+      const ok = skinOk(s.id), b = document.createElement("button"); b.type = "button";
+      b.disabled = !ok; b.setAttribute("aria-pressed", s.id === skin ? "true" : "false");
+      const n = document.createElement("span"); n.textContent = s.name + " (" + s.t + ")";
+      const m = document.createElement("small"); m.textContent = s.free ? "Free" : (supporter ? "Supporter" : "Supporters");
+      b.appendChild(n); b.appendChild(m);
+      b.addEventListener("click", function () { skin = s.id; lsSet("ff-skin", skin); renderSkins(); });
+      box.appendChild(b);
+    });
+    $("skin-note").textContent = supporter ? "Thank you for supporting the game." : "Tip 0.01 XNO or more to unlock the supporter coin skins.";
+    $("supmark").hidden = !supporter;
+  }
+
+  // ---------- share ----------
+  function copyText(text, ok, fail) { try { navigator.clipboard.writeText(text).then(ok, fail); } catch (e) { fail(); } }
+  function shareUrl() { return location.href.split("#")[0].split("?")[0]; }
+  $("o-share").addEventListener("click", function () {
+    const head = mode === "daily" ? "Feeless Flap #" + dailyCfg.no : "Feeless Flap";
+    const med = medalFor(score).n, msg = head + ": I dodged " + score + " fee gates" + (med !== "None" ? " (" + med + " medal)" : "") + ". Can you beat it? " + shareUrl();
+    const fallback = function () { copyText(msg, function () { $("o-status").textContent = "Copied. Paste it into a message to challenge a friend."; }, function () { $("o-status").textContent = msg; }); };
+    if (navigator.share) { navigator.share({ text: msg }).catch(fallback); return; }
+    fallback();
+  });
+  $("o-tip").addEventListener("click", function () {
+    pickAmount(document.querySelector('.amounts button[data-amt="0.01"]'));
+    $("ov").hidden = true;
+    try { $("tip").scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {}
+  });
+
+  // ---------- tip card ----------
+  let tipAmt = "0.01", qr = null, checking = false;
+  function toRaw(xno) {
+    const parts = xno.split("."), frac = ((parts[1] || "") + "000000000000000000000000000000").slice(0, 30);
+    return (BigInt(parts[0]) * 10n ** 30n + BigInt(frac)).toString();
+  }
+  function uriFor(a) { return "nano:" + NANO_ADDRESS + (a ? "?amount=" + toRaw(a) : ""); }
+  function setPending() { if (tipAmt) lsSet("ff-tip", JSON.stringify({ amt: tipAmt, ts: Date.now() })); }
+  function renderTip() {
+    $("addr").textContent = NANO_ADDRESS;
+    const uri = uriFor(tipAmt);
+    $("openw").href = uri; $("check").hidden = !tipAmt;
+    $("thint").textContent = tipAmt
+      ? "On a phone, tap Open in wallet. On a computer, scan the code with your Nano wallet. Then press the check button."
+      : "Any amount is welcome. Tips sent this way can't be checked automatically, so they don't unlock the coin skins.";
+    try {
+      if (typeof QRCode === "undefined") throw new Error("no qr");
+      if (!qr) qr = new QRCode($("qr"), { text: uri, width: 168, height: 168, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.M });
+      else { qr.clear(); qr.makeCode(uri); }
+    } catch (e) { $("qr").style.display = "none"; }
+  }
+  function pickAmount(btn) {
+    if (!btn) return;
+    document.querySelectorAll(".amounts button").forEach(function (o) { o.setAttribute("aria-pressed", "false"); });
+    btn.setAttribute("aria-pressed", "true");
+    tipAmt = btn.getAttribute("data-amt"); setPending(); renderTip(); $("tstatus").textContent = "";
+  }
+  document.querySelectorAll(".amounts button").forEach(function (b) { b.addEventListener("click", function () { pickAmount(b); }); });
+  $("openw").addEventListener("click", function () { setPending(); $("tstatus").textContent = "After you send, come back here and press the check button."; });
+  $("copy").addEventListener("click", function () {
+    setPending();
+    copyText(NANO_ADDRESS, function () { $("tstatus").textContent = "Address copied."; }, function () {
+      const r = document.createRange(); r.selectNodeContents($("addr")); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      $("tstatus").textContent = "Address selected. Press copy on your device.";
+    });
+  });
+  function rpc(body) {
+    let i = 0;
+    return new Promise(function (resolve, reject) {
+      (function next() {
+        if (i >= RPCS.length) { reject(new Error("unreachable")); return; }
+        const url = RPCS[i++], ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 6000);
+        fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal })
+          .then(function (r) { return r.json(); })
+          .then(function (j) { clearTimeout(t); resolve(j); })
+          .catch(function () { clearTimeout(t); next(); });
+      })();
+    });
+  }
+  async function findTip(min, since) {
+    const claimed = jget("ff-claimed", []), need = BigInt(toRaw(min));
+    let reachable = false;
+    try {
+      const h = await rpc({ action: "account_history", account: NANO_ADDRESS, count: "60" });
+      reachable = true;
+      if (h && Array.isArray(h.history)) {
+        for (const b of h.history) {
+          if (b.type !== "receive" || claimed.indexOf(b.hash) >= 0) continue;
+          const ts = +b.local_timestamp;
+          if (ts > 0 && ts * 1000 < since - 120000) continue;
+          if (BigInt(b.amount) >= need) return { ok: true, hash: b.hash };
+        }
+      }
+    } catch (e) {}
+    for (const cmd of ["receivable", "pending"]) {
+      try {
+        const p = await rpc({ action: cmd, account: NANO_ADDRESS, count: "60", threshold: need.toString(), source: "true" });
+        reachable = true;
+        if (p && p.error) continue;
+        const bl = p && p.blocks;
+        if (bl && typeof bl === "object") {
+          for (const hsh in bl) {
+            if (claimed.indexOf(hsh) >= 0) continue;
+            const v = bl[hsh], amt = typeof v === "object" ? v.amount : v;
+            if (BigInt(amt) >= need) return { ok: true, hash: hsh };
+          }
+        }
+        break;
+      } catch (e) {}
+    }
+    return { ok: false, reachable: reachable };
+  }
+  function unlockSupporter(hash) {
+    const claimed = jget("ff-claimed", []); claimed.push(hash); lsSet("ff-claimed", JSON.stringify(claimed.slice(-50)));
+    supporter = true; lsSet("ff-sup", "1"); renderSkins(); lsSet("ff-tip", "");
+    $("tstatus").textContent = "Thank you! Your tip arrived and the supporter coin skins are unlocked.";
+  }
+  async function runCheck(tries, silent) {
+    if (checking) return;
+    const pend = jget("ff-tip", null);
+    if (!pend || !pend.amt) { if (!silent) $("tstatus").textContent = "Pick an amount first."; return; }
+    checking = true; $("check").disabled = true;
+    if (!silent) $("tstatus").textContent = "Checking the Nano network…";
+    let res = { ok: false, reachable: false };
+    for (let i = 0; i < tries; i++) {
+      res = await findTip(pend.amt, pend.ts);
+      if (res.ok) break;
+      if (i < tries - 1) await new Promise(function (r) { setTimeout(r, 4000); });
+    }
+    checking = false; $("check").disabled = false;
+    if (res.ok) unlockSupporter(res.hash);
+    else if (!silent) $("tstatus").textContent = res.reachable
+      ? "Not seen yet. Transfers take a few seconds, so press the check button again in a moment."
+      : "Couldn't reach the Nano network from here. Try again shortly.";
+  }
+  $("check").addEventListener("click", function () { runCheck(8, false); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden && !supporter && jget("ff-tip", null)) runCheck(4, true);
+  });
+  { const p = jget("ff-tip", null); if (p && !p.amt) lsSet("ff-tip", ""); }
+
+  // ---------- go ----------
+  renderSound(); renderSkins(); renderTip(); renderDaily(); renderStats();
+  setInterval(renderDaily, 30000);
+  fit(); newGame(); requestAnimationFrame(frame);
+  if (/[?&]selftest/.test(location.search)) {
+    window.__ff = {
+      get state() { return state; }, get score() { return score; }, get bird() { return bird; }, get pipes() { return pipes; }, get dist() { return dist; }, get speed() { return speed; },
+      update: update, flap: flap, newGame: newGame, setMode: function (m) { mode = m; newGame(); }, get best() { return best; }, get daily() { return daily; }, get gapsT() { return gapsT; },
+      setDist: function (d) { dist = d; }, GY: GY, BX: BX, PW: PW, H: H
+    };
+  }
+})();
+</script>
+</body></html>
